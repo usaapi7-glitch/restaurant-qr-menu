@@ -65,15 +65,18 @@
 
     <!-- TAB 3: TABLES & QR CODE MANAGER -->
     <section id="panel-tables" class="tab-panel hidden space-y-4">
-      <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div class="text-xs font-extrabold text-blue-900">📶 Mobile Scan Network URL (Wi-Fi Router IP)</div>
-          <div class="text-[11px] text-blue-700">Mobile camera se scan karne ke liye server <code class="bg-white px-1 rounded font-mono">--host 0.0.0.0</code> par chalayein aur yeh Wi-Fi IP URL use karein:</div>
+      <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="text-xs font-extrabold text-blue-900">📶 Mobile Scan Network URL (Wi-Fi Router IP)</div>
+            <div class="text-[11px] text-blue-700">Mobile camera se scan karne ke liye server <code class="bg-white px-1 rounded font-mono">--host 0.0.0.0</code> par chalayein aur yeh Wi-Fi IP URL use karein:</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="qrBaseUrl" type="text" class="px-3 py-1.5 text-xs font-mono bg-white border border-blue-300 rounded-xl w-56" />
+            <button onclick="loadTables()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl">Update QR</button>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <input id="qrBaseUrl" type="text" class="px-3 py-1.5 text-xs font-mono bg-white border border-blue-300 rounded-xl w-56" />
-          <button onclick="loadTables()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl">Update QR</button>
-        </div>
+        <div id="qrIpSuggestions" class="hidden flex-wrap items-center gap-1.5 text-[11px]"></div>
       </div>
 
       <div class="bg-white rounded-2xl p-4 border border-gray-200 flex flex-wrap items-end gap-3">
@@ -411,14 +414,27 @@ async function saveNewItem(e) {
 
 async function loadTables() {
   const baseInput = document.getElementById('qrBaseUrl');
+  const sugBox = document.getElementById('qrIpSuggestions');
+  const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname);
+
   if (!baseInput.value.trim()) {
-    try {
-      const netRes = await fetch('/api/admin/network-info');
-      if (netRes.ok) {
-        const net = await netRes.json();
-        baseInput.value = net.lan_base_url;
-      }
-    } catch (e) {}
+    if (!isLocalHost) {
+      baseInput.value = window.location.origin;
+    } else {
+      try {
+        const netRes = await fetch('/api/admin/network-info');
+        if (netRes.ok) {
+          const net = await netRes.json();
+          baseInput.value = net.lan_base_url;
+          if (net.candidate_urls && net.candidate_urls.length > 1) {
+            sugBox.classList.remove('hidden');
+            sugBox.classList.add('flex');
+            sugBox.innerHTML = '<span class="text-blue-800 font-semibold">Detected IPs:</span>' +
+              net.candidate_urls.map(u => `<button type="button" onclick="document.getElementById('qrBaseUrl').value='${u}';loadTables();" class="px-2 py-0.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-100 font-mono text-blue-900">${u}</button>`).join('');
+          }
+        }
+      } catch (e) {}
+    }
   }
   const baseParam = baseInput.value.trim() ? `&base_url=${encodeURIComponent(baseInput.value.trim())}` : '';
   const res = await fetch('/api/admin/tables');

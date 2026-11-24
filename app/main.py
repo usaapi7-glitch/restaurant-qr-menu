@@ -49,6 +49,9 @@ from app.utils import (
     format_kot_message,
     build_whatsapp_url,
     get_local_lan_ip,
+    get_candidate_lan_ips,
+    get_client_ip,
+    resolve_public_base_url,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -430,20 +433,18 @@ async def checkout_order(
     if not payload.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
 
-    # Layer 4: Backend Rate-Limiting (10-minute cooldown per IP)
+    # Layer 4: Backend Rate-Limiting (10-minute cooldown per IP; scoped by table for DINE_IN)
     cooldown_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
-    recent_order = (
-        db.query(Order)
-        .filter(
-            Order.restaurant_id == restaurant.id,
-            Order.client_ip == client_ip,
-            Order.created_at >= cooldown_cutoff,
-        )
-        .order_by(Order.created_at.desc())
-        .first()
+    cooldown_query = db.query(Order).filter(
+        Order.restaurant_id == restaurant.id,
+        Order.client_ip == client_ip,
+        Order.created_at >= cooldown_cutoff,
     )
+    if payload.order_type == "DINE_IN" and payload.table_number:
+        cooldown_query = cooldown_query.filter(Order.table_number == payload.table_number)
+    recent_order = cooldown_query.order_by(Order.created_at.desc()).first()
     if recent_order:
         # Handle naive vs aware datetime from SQLite
         created = recent_order.created_at
@@ -955,11 +956,18 @@ def reset_table_token(
 @app.get("/api/admin/network-info")
 def get_network_info(request: Request, current_user: User = Depends(get_current_user)):
     lan_ip = get_local_lan_ip()
-    port = request.url.port or 8085
-    scheme = request.url.scheme or "http"
+    candidates = get_candidate_lan_ips()
+    scheme = request.headers.get("x-forwarded-proto", "").split(",")[0].strip() or request.url.scheme or "http"
+    port = request.url.port
+    port_suffix = f":{port}" if port and not ((scheme == "http" and port == 80) or (scheme == "https" and port == 443)) else ""
+    host = request.url.hostname or "127.0.0.1"
+    is_local_host = host in ("127.0.0.1", "localhost", "0.0.0.0")
     return {
         "lan_ip": lan_ip,
-        "lan_base_url": f"{scheme}://{lan_ip}:{port}",
+        "candidate_ips": candidates,
+        "candidate_urls": [f"{scheme}://{ip}{port_suffix}" for ip in candidates],
+        "lan_base_url": resolve_public_base_url(request),
+        "is_local_host": is_local_host,
     }
 
 
@@ -981,15 +989,7 @@ def download_table_qr(
         raise HTTPException(status_code=404, detail="Table not found")
 
     restaurant = db.query(Restaurant).filter(Restaurant.id == current_user.restaurant_id).first()
-    if base_url:
-        resolved_base = base_url.rstrip("/")
-    else:
-        resolved_base = str(request.base_url).rstrip("/")
-        if "127.0.0.1" in resolved_base or "localhost" in resolved_base:
-            lan_ip = get_local_lan_ip()
-            port = request.url.port or 8085
-            scheme = request.url.scheme or "http"
-            resolved_base = f"{scheme}://{lan_ip}:{port}"
+    resolved_base = resolve_public_base_url(request, base_url)
 
     qr_url = f"{resolved_base}/t/{table.table_number}-{table.secret_token}"
     png_bytes = generate_qr_card_png(qr_url, restaurant.name, table.label)

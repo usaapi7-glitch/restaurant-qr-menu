@@ -8,16 +8,103 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 
-def get_local_lan_ip() -> str:
+def _is_private_lan_ip(ip: str) -> tuple[int, str]:
+    """Return priority tuple (lower is better) for sorting candidate LAN IPs."""
+    if ip.startswith("192.168."):
+        return (0, ip)
+    if ip.startswith("10."):
+        return (1, ip)
+    parts = ip.split(".")
+    if len(parts) == 4 and parts[0] == "172":
+        try:
+            second = int(parts[1])
+            if 16 <= second <= 31:
+                return (2, ip)
+        except ValueError:
+            pass
+    return (3, ip)
+
+
+def get_candidate_lan_ips() -> list[str]:
+    candidates: list[str] = []
+
+    def add_ip(ip: str):
+        if (
+            ip
+            and not ip.startswith("127.")
+            and not ip.startswith("169.254.")
+            and ip != "0.0.0.0"
+            and ":" not in ip
+            and ip not in candidates
+        ):
+            candidates.append(ip)
+
+    # 1. UDP routing probes (works without sending packets; include LAN gateways for offline mode)
+    for target in ("8.8.8.8", "192.168.1.1", "192.168.0.1", "192.168.100.1", "10.0.0.1"):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0.3)
+            s.connect((target, 80))
+            add_ip(s.getsockname()[0])
+            s.close()
+        except Exception:
+            pass
+
+    # 2. Hostname address resolution (picks up active NICs when offline)
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0.5)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            add_ip(info[4][0])
     except Exception:
-        return "127.0.0.1"
+        pass
+
+    try:
+        for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+            add_ip(ip)
+    except Exception:
+        pass
+
+    candidates.sort(key=_is_private_lan_ip)
+    return candidates
+
+
+def get_local_lan_ip() -> str:
+    candidates = get_candidate_lan_ips()
+    return candidates[0] if candidates else "127.0.0.1"
+
+
+def get_client_ip(request) -> str:
+    """Extract real client IP, respecting reverse-proxy headers when present."""
+    for header in ("cf-connecting-ip", "x-real-ip", "x-forwarded-for"):
+        val = request.headers.get(header)
+        if val:
+            first_ip = val.split(",")[0].strip()
+            if first_ip:
+                return first_ip
+    return request.client.host if request.client else "unknown"
+
+
+def resolve_public_base_url(request, explicit_base_url: str | None = None) -> str:
+    """Resolve the base URL for QR codes, replacing localhost/127.0.0.1 with the LAN IP."""
+    if explicit_base_url and explicit_base_url.strip():
+        return explicit_base_url.strip().rstrip("/")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    if forwarded_host:
+        scheme = forwarded_proto or request.url.scheme or "http"
+        return f"{scheme}://{forwarded_host}".rstrip("/")
+
+    host = request.url.hostname or "127.0.0.1"
+    scheme = request.url.scheme or "http"
+    port = request.url.port
+
+    if host in ("127.0.0.1", "localhost", "0.0.0.0"):
+        host = get_local_lan_ip()
+
+    if port and not ((scheme == "http" and port == 80) or (scheme == "https" and port == 443)):
+        return f"{scheme}://{host}:{port}"
+    return f"{scheme}://{host}"
 
 
 def generate_secret_token(length: int = 4) -> str:
