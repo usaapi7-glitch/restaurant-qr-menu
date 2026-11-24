@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login — Restaurant QR Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-sm rounded-3xl shadow-xl p-7 space-y-5">
+    <div class="text-center">
+      <div class="w-12 h-12 rounded-2xl bg-orange-600 text-white font-black text-xl flex items-center justify-center mx-auto mb-3">QR</div>
+      <h1 class="text-xl font-extrabold text-gray-900">Owner / Manager Portal</h1>
+      <p class="text-xs text-gray-500 mt-1">Sign in to manage menu, prices & live orders</p>
+    </div>
+
+    <form id="loginForm" class="space-y-3.5">
+      <div>
+        <label class="text-xs font-bold text-gray-600">Username</label>
+        <input id="username" type="text" required placeholder="owner" class="mt-1 w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl outline-none focus:border-orange-600" />
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-600">Password</label>
+        <input id="password" type="password" required placeholder="••••••••" class="mt-1 w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl outline-none focus:border-orange-600" />
+      </div>
+      <div id="err" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-2.5"></div>
+      <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm shadow transition">
+        Login to Dashboard →
+      </button>
+    </form>
+
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-[11px] text-gray-600 space-y-1">
+      <div class="font-bold text-gray-700">Demo Credentials:</div>
+      <div>Owner: <code class="font-mono bg-white px-1 rounded">owner</code> / <code class="font-mono bg-white px-1 rounded">owner123</code></div>
+      <div>Manager: <code class="font-mono bg-white px-1 rounded">manager</code> / <code class="font-mono bg-white px-1 rounded">manager123</code></div>
+    </div>
+  </div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.classList.add('hidden');
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('username').value.trim(),
+      password: document.getElementById('password').value,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    err.textContent = data.detail || 'Login failed';
+    err.classList.remove('hidden');
+    return;
+  }
+  window.location.href = '/admin';
+});
+</script>
+</body>
+</html>

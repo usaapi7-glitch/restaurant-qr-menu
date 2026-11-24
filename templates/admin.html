@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Portal — Restaurant QR POS-Lite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-orange-600 text-white font-black flex items-center justify-center text-sm">QR</div>
+        <div>
+          <h1 class="font-extrabold text-sm sm:text-base leading-tight">Admin Portal</h1>
+          <div class="flex items-center gap-2 text-[11px] text-gray-500">
+            <span id="userBadge" class="font-semibold text-orange-700"></span>
+            <span id="wsBadge" class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">Connecting...</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/menu" target="_blank" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold">View Menu ↗</a>
+        <button onclick="logout()" class="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold">Logout</button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="max-w-6xl mx-auto px-4 flex gap-1.5 overflow-x-auto pb-2.5 text-xs">
+      <button onclick="switchTab('orders')" id="tab-orders" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-900 text-white whitespace-nowrap">📋 Live Orders</button>
+      <button onclick="switchTab('menu')" id="tab-menu" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap">🍔 Menu & Stock</button>
+      <button onclick="switchTab('tables')" id="tab-tables" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap">🪑 Tables & QR</button>
+      <button onclick="switchTab('wifi')" id="tab-wifi" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap">📶 Wi-Fi Control</button>
+      <button onclick="switchTab('analytics')" id="tab-analytics" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap">📊 Analytics</button>
+      <button onclick="switchTab('settings')" id="tab-settings" class="nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap">⚙️ Settings</button>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 space-y-6">
+
+    <!-- TAB 1: LIVE ORDERS & WAITER CALLS -->
+    <section id="panel-orders" class="tab-panel space-y-4">
+      <div id="waiterCallsWrap" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 space-y-2">
+        <h2 class="text-sm font-extrabold text-amber-900">🔔 Active Waiter / Bill Requests</h2>
+        <div id="waiterCallsList" class="grid sm:grid-cols-2 gap-2"></div>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-extrabold">Recent Orders (WhatsApp & Dine-In)</h2>
+        <button onclick="loadOrders()" class="text-xs font-bold text-orange-600 hover:underline">↻ Refresh</button>
+      </div>
+      <div id="ordersList" class="grid md:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- TAB 2: MENU & 10-SEC QUICK STOCK EDITOR -->
+    <section id="panel-menu" class="tab-panel hidden space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-base font-extrabold">10-Second Menu & Stock Manager</h2>
+        <button onclick="openAddItemModal()" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow">+ Add New Item</button>
+      </div>
+      <div id="adminMenuList" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+    </section>
+
+    <!-- TAB 3: TABLES & QR CODE MANAGER -->
+    <section id="panel-tables" class="tab-panel hidden space-y-4">
+      <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="text-xs font-extrabold text-blue-900">📶 Mobile Scan Network URL (Wi-Fi Router IP)</div>
+          <div class="text-[11px] text-blue-700">Mobile camera se scan karne ke liye server <code class="bg-white px-1 rounded font-mono">--host 0.0.0.0</code> par chalayein aur yeh Wi-Fi IP URL use karein:</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="qrBaseUrl" type="text" class="px-3 py-1.5 text-xs font-mono bg-white border border-blue-300 rounded-xl w-56" />
+          <button onclick="loadTables()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl">Update QR</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-gray-200 flex flex-wrap items-end gap-3">
+        <div>
+          <label class="text-xs font-bold text-gray-600">Table Number</label>
+          <input id="newTableNum" type="text" placeholder="06" class="mt-1 block w-28 px-3 py-2 text-sm border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-600">Table Label</label>
+          <input id="newTableLabel" type="text" placeholder="Table 06 (VIP)" class="mt-1 block w-48 px-3 py-2 text-sm border rounded-xl" />
+        </div>
+        <button onclick="addTable()" class="px-4 py-2 bg-orange-600 text-white text-xs font-bold rounded-xl">+ Add Table</button>
+      </div>
+      <div id="tablesList" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- TAB 4: WI-FI BRIDGE CONTROL -->
+    <section id="panel-wifi" class="tab-panel hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 border border-gray-200 space-y-4 max-w-2xl">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-extrabold">Restaurant Wi-Fi Misuse Control</h2>
+            <p class="text-xs text-gray-500">Cloud Control → Counter PC Local Bridge → Router Guest Wi-Fi</p>
+          </div>
+          <span id="bridgeStatusBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-700">Bridge: Offline</span>
+        </div>
+
+        <div id="ispNoticeBox" class="hidden bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded-xl p-3"></div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-gray-600">Guest Wi-Fi SSID</label>
+            <input id="wifiSsid" type="text" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-gray-600">Router / ISP Model</label>
+            <select id="wifiRouter" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-white">
+              <option value="TP-Link Archer C6">TP-Link (Full Guest Wi-Fi + Whitelist)</option>
+              <option value="Tenda AC10">Tenda (Guest Wi-Fi + Speed Limit)</option>
+              <option value="PTCL ZTE / Huawei">PTCL Router (ISP Locked Warning)</option>
+              <option value="StormFiber Fiberhome">StormFiber Router (ISP Locked Warning)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border">
+          <div>
+            <div class="text-sm font-bold">Only Menu & WhatsApp Mode (صرف مینو اور واٹس ایپ موڈ)</div>
+            <div class="text-xs text-gray-500">YouTube/Downloads block karke sirf Menu aur WhatsApp chalayega</div>
+          </div>
+          <input id="wifiOnlyMenu" type="checkbox" class="w-5 h-5 accent-orange-600" />
+        </div>
+
+        <div>
+          <label class="text-xs font-bold text-gray-600">Guest Speed Limit (Mbps): <span id="speedVal" class="text-orange-600">2 Mbps</span></label>
+          <input id="wifiSpeed" type="range" min="1" max="10" value="2" oninput="document.getElementById('speedVal').textContent = this.value + ' Mbps'" class="w-full accent-orange-600 mt-1" />
+        </div>
+
+        <button onclick="saveWifiControl()" class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow">
+          Apply Policy to Local Bridge
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 5: ANALYTICS -->
+    <section id="panel-analytics" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="analyticsCards"></div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl p-4 border">
+          <h3 class="text-sm font-extrabold mb-3">🔥 Top Ordered Dishes</h3>
+          <div id="topDishesList" class="space-y-2 text-sm"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border">
+          <h3 class="text-sm font-extrabold mb-3">👀 Most Viewed Items</h3>
+          <div id="mostViewedList" class="space-y-2 text-sm"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: SETTINGS (OWNER ONLY) -->
+    <section id="panel-settings" class="tab-panel hidden">
+      <form id="settingsForm" onsubmit="saveSettings(event)" class="bg-white rounded-2xl p-5 border max-w-2xl space-y-3.5">
+        <h2 class="text-base font-extrabold">Restaurant & Anti-Spam Settings</h2>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div><label class="text-xs font-bold text-gray-600">Restaurant Name</label><input id="setName" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">WhatsApp Number (923xx...)</label><input id="setWa" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div class="sm:col-span-2"><label class="text-xs font-bold text-gray-600">Address</label><input id="setAddr" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Dynamic 4-Digit Table PIN</label><input id="setPin" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl font-mono" /></div>
+          <div><label class="text-xs font-bold text-gray-600">COD Cap Limit (PKR)</label><input id="setCodCap" type="number" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Delivery Fee (PKR)</label><input id="setDelFee" type="number" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Tax (%)</label><input id="setTax" type="number" step="0.1" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Latitude</label><input id="setLat" type="number" step="0.0001" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Longitude</label><input id="setLng" type="number" step="0.0001" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Dine-In Geo Radius (m)</label><input id="setGeoR" type="number" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div><label class="text-xs font-bold text-gray-600">Delivery Radius (km)</label><input id="setDelR" type="number" step="0.5" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+          <div class="sm:col-span-2 flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-xl">
+            <div>
+              <div class="text-xs font-extrabold text-orange-900">Require Table PIN (ON / OFF)</div>
+              <div class="text-[11px] text-orange-700">ON rakhne par dine-in checkout mein 4-digit Table PIN dalna lazmi hoga</div>
+            </div>
+            <input id="setRequirePin" type="checkbox" class="w-5 h-5 accent-orange-600" />
+          </div>
+        </div>
+        <button type="submit" class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow">Save Settings</button>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- Add/Edit Item Modal -->
+  <div id="itemFormModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <form onsubmit="saveNewItem(event)" class="bg-white w-full max-w-md rounded-3xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="font-extrabold text-base">Add Menu Item (10s Quick Add)</h3>
+        <button type="button" onclick="document.getElementById('itemFormModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-gray-100 font-bold">✕</button>
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-600">Category</label>
+        <select id="newItemCat" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl bg-white"></select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs font-bold text-gray-600">Name (EN)</label><input id="newItemName" required class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+        <div><label class="text-xs font-bold text-gray-600">Name (Urdu)</label><input id="newItemNameUr" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+      </div>
+      <div><label class="text-xs font-bold text-gray-600">Price (PKR)</label><input id="newItemPrice" type="number" required class="mt-1 w-full px-3 py-2 text-sm border rounded-xl" /></div>
+      <div><label class="text-xs font-bold text-gray-600">Description</label><textarea id="newItemDesc" rows="2" class="mt-1 w-full px-3 py-2 text-sm border rounded-xl"></textarea></div>
+      <div>
+        <label class="text-xs font-bold text-gray-600">Upload Photo (Auto-WebP Compressed)</label>
+        <input id="newItemFile" type="file" accept="image/*" onchange="uploadItemPhoto(this)" class="mt-1 w-full text-xs" />
+        <input id="newItemImgUrl" type="text" placeholder="Or paste image URL" class="mt-1 w-full px-3 py-2 text-xs border rounded-xl" />
+      </div>
+      <div class="flex gap-4 text-xs font-semibold">
+        <label class="flex items-center gap-1.5"><input id="newItemPop" type="checkbox" /> Popular</label>
+        <label class="flex items-center gap-1.5"><input id="newItemSpicy" type="checkbox" /> Spicy</label>
+        <label class="flex items-center gap-1.5"><input id="newItemVeg" type="checkbox" /> Veg</label>
+      </div>
+      <button type="submit" class="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl text-sm">Save Item</button>
+    </form>
+  </div>
+
+<script>
+let currentUser = null;
+let categoriesCache = [];
+
+async function initAdmin() {
+  const meRes = await fetch('/api/auth/me');
+  if (!meRes.ok) { window.location.href = '/admin/login'; return; }
+  currentUser = await meRes.json();
+  document.getElementById('userBadge').textContent = `${currentUser.username} (${currentUser.role})`;
+
+  connectWebSocket();
+  loadOrders();
+  loadWaiterCalls();
+  loadAdminMenu();
+  loadTables();
+  loadSettings();
+  loadAnalytics();
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('panel-' + name).classList.remove('hidden');
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    t.className = 'nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 whitespace-nowrap';
+  });
+  document.getElementById('tab-' + name).className = 'nav-tab px-3.5 py-2 rounded-xl font-bold bg-gray-900 text-white whitespace-nowrap';
+  if (name === 'analytics') loadAnalytics();
+}
+
+function playAlertBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch (e) {}
+}
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/admin`);
+  const badge = document.getElementById('wsBadge');
+  ws.onopen = () => { badge.textContent = '🟢 Live'; badge.className = 'px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-bold'; };
+  ws.onclose = () => { badge.textContent = '🔴 Disconnected'; setTimeout(connectWebSocket, 3000); };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.event === 'new_order') { playAlertBeep(); loadOrders(); loadAnalytics(); }
+    if (msg.event === 'waiter_call') { playAlertBeep(); loadWaiterCalls(); }
+    if (msg.event === 'bridge_status') { updateBridgeBadge(msg.status, msg.note); }
+  };
+}
+
+async function loadOrders() {
+  const res = await fetch('/api/admin/orders');
+  const orders = await res.json();
+  const list = document.getElementById('ordersList');
+  if (!orders.length) { list.innerHTML = '<p class="text-sm text-gray-400">No orders yet.</p>'; return; }
+
+  const statusColors = {
+    PENDING: 'bg-amber-100 text-amber-800',
+    CONFIRMED: 'bg-blue-100 text-blue-800',
+    PREPARING: 'bg-purple-100 text-purple-800',
+    COMPLETED: 'bg-green-100 text-green-800',
+    CANCELLED: 'bg-red-100 text-red-700',
+  };
+
+  list.innerHTML = orders.map(o => `
+    <div class="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2.5">
+      <div class="flex justify-between items-start">
+        <div>
+          <span class="font-mono font-extrabold text-sm">${o.order_code}</span>
+          <span class="ml-2 text-xs font-bold px-2 py-0.5 rounded-full ${o.order_type === 'DINE_IN' ? 'bg-orange-100 text-orange-800' : 'bg-indigo-100 text-indigo-800'}">
+            ${o.order_type === 'DINE_IN' ? '🪑 Table ' + o.table_number : '🛵 Delivery'}
+          </span>
+        </div>
+        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${statusColors[o.status] || ''}">${o.status}</span>
+      </div>
+      ${o.order_type === 'DELIVERY' ? `<div class="text-xs text-gray-600">${o.customer_name} • ${o.customer_phone}<br>${o.customer_address}</div>` : ''}
+      <div class="text-xs space-y-1 bg-gray-50 p-2.5 rounded-xl">
+        ${o.items.map(i => `<div>• <strong>${i.qty}x</strong> ${i.name} ${i.variant ? `[${i.variant}]` : ''} — PKR ${i.line_total.toLocaleString()}</div>`).join('')}
+      </div>
+      <div class="flex justify-between items-center text-sm font-extrabold">
+        <span>Total: PKR ${o.net_total.toLocaleString()}</span>
+        <div class="flex gap-1.5 text-[11px]">
+          <button onclick="setOrderStatus(${o.id}, 'CONFIRMED')" class="px-2.5 py-1 bg-blue-600 text-white rounded-lg">Confirm</button>
+          <button onclick="setOrderStatus(${o.id}, 'COMPLETED')" class="px-2.5 py-1 bg-green-600 text-white rounded-lg">Complete</button>
+          <button onclick="setOrderStatus(${o.id}, 'CANCELLED')" class="px-2.5 py-1 bg-gray-200 text-gray-700 rounded-lg">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function setOrderStatus(id, status) {
+  await fetch(`/api/admin/orders/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  loadOrders();
+}
+
+async function loadWaiterCalls() {
+  const res = await fetch('/api/admin/waiter-calls');
+  const calls = await res.json();
+  const wrap = document.getElementById('waiterCallsWrap');
+  wrap.classList.toggle('hidden', calls.length === 0);
+  document.getElementById('waiterCallsList').innerHTML = calls.map(c => `
+    <div class="bg-white rounded-xl p-3 border border-amber-200 flex items-center justify-between">
+      <div class="text-xs font-bold">
+        ${c.call_type === 'CALL_WAITER' ? '🔔 Waiter Called' : '🧾 Bill Requested'} — <span class="text-orange-700">Table ${c.table_number}</span>
+      </div>
+      <button onclick="resolveCall(${c.id})" class="px-2.5 py-1 bg-amber-600 text-white text-[11px] font-bold rounded-lg">Done</button>
+    </div>
+  `).join('');
+}
+
+async function resolveCall(id) {
+  await fetch(`/api/admin/waiter-calls/${id}/resolve`, { method: 'PATCH' });
+  loadWaiterCalls();
+}
+
+async function loadAdminMenu() {
+  const res = await fetch('/api/menu');
+  const data = await res.json();
+  categoriesCache = data.categories;
+  document.getElementById('newItemCat').innerHTML = categoriesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  document.getElementById('adminMenuList').innerHTML = data.items.map(i => `
+    <div class="bg-white rounded-2xl p-3.5 border border-gray-200 flex flex-col justify-between gap-2.5">
+      <div class="flex gap-3">
+        <img src="${i.image_url || 'https://placehold.co/100'}" class="w-16 h-16 rounded-xl object-cover bg-gray-100" />
+        <div class="min-w-0">
+          <div class="font-bold text-sm truncate">${i.name}</div>
+          <div class="text-xs text-gray-500">PKR ${i.base_price.toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between border-t pt-2">
+        <button onclick="toggleStock(${i.id})" class="px-3 py-1 rounded-lg text-xs font-bold ${i.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}">
+          ${i.is_available ? '✅ In Stock (1-Click)' : '❌ Out of Stock'}
+        </button>
+        ${currentUser.role === 'owner' ? `<button onclick="deleteItem(${i.id})" class="text-xs text-red-500 font-semibold">Delete</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function toggleStock(id) {
+  await fetch(`/api/admin/items/${id}/toggle-stock`, { method: 'PATCH' });
+  loadAdminMenu();
+}
+
+async function deleteItem(id) {
+  if (!confirm('Delete this item?')) return;
+  await fetch(`/api/admin/items/${id}`, { method: 'DELETE' });
+  loadAdminMenu();
+}
+
+function openAddItemModal() {
+  document.getElementById('itemFormModal').classList.remove('hidden');
+}
+
+async function uploadItemPhoto(input) {
+  if (!input.files[0]) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  const res = await fetch('/api/admin/upload-image', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (res.ok) document.getElementById('newItemImgUrl').value = data.image_url;
+}
+
+async function saveNewItem(e) {
+  e.preventDefault();
+  await fetch('/api/admin/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      category_id: Number(document.getElementById('newItemCat').value),
+      name: document.getElementById('newItemName').value.trim(),
+      name_ur: document.getElementById('newItemNameUr').value.trim(),
+      base_price: Number(document.getElementById('newItemPrice').value),
+      description: document.getElementById('newItemDesc').value.trim(),
+      image_url: document.getElementById('newItemImgUrl').value.trim(),
+      is_popular: document.getElementById('newItemPop').checked,
+      is_spicy: document.getElementById('newItemSpicy').checked,
+      is_veg: document.getElementById('newItemVeg').checked,
+    }),
+  });
+  document.getElementById('itemFormModal').classList.add('hidden');
+  loadAdminMenu();
+}
+
+async function loadTables() {
+  const baseInput = document.getElementById('qrBaseUrl');
+  if (!baseInput.value.trim()) {
+    try {
+      const netRes = await fetch('/api/admin/network-info');
+      if (netRes.ok) {
+        const net = await netRes.json();
+        baseInput.value = net.lan_base_url;
+      }
+    } catch (e) {}
+  }
+  const baseParam = baseInput.value.trim() ? `&base_url=${encodeURIComponent(baseInput.value.trim())}` : '';
+  const res = await fetch('/api/admin/tables');
+  const tables = await res.json();
+  document.getElementById('tablesList').innerHTML = tables.map(t => `
+    <div class="bg-white rounded-2xl p-4 border border-gray-200 space-y-2.5">
+      <div class="flex justify-between items-center">
+        <span class="font-extrabold text-sm">${t.label}</span>
+        <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">/t/${t.slug}</span>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-2 flex justify-center border">
+        <img src="/api/admin/tables/${t.id}/qr.png?inline=1${baseParam}&t=${Date.now()}" alt="QR ${t.label}" class="w-44 h-auto rounded-lg" />
+      </div>
+      <div class="flex gap-2">
+        <a href="/t/${t.slug}" target="_blank" class="flex-1 text-center py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold">Open Menu ↗</a>
+        <a href="/api/admin/tables/${t.id}/qr.png?${baseParam.slice(1)}" class="flex-1 text-center py-1.5 bg-orange-600 text-white rounded-xl text-xs font-bold">Download QR</a>
+      </div>
+      <button onclick="resetTableToken(${t.id})" class="w-full py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold">🔄 Reset QR / Secret Token</button>
+    </div>
+  `).join('');
+}
+
+async function addTable() {
+  const table_number = document.getElementById('newTableNum').value.trim();
+  const label = document.getElementById('newTableLabel').value.trim();
+  if (!table_number || !label) return;
+  await fetch('/api/admin/tables', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table_number, label }),
+  });
+  loadTables();
+}
+
+async function resetTableToken(id) {
+  if (!confirm('Reset QR token? Old printed QR will stop working immediately.')) return;
+  await fetch(`/api/admin/tables/${id}/reset-token`, { method: 'POST' });
+  loadTables();
+}
+
+async function loadSettings() {
+  const res = await fetch('/api/admin/settings');
+  const s = await res.json();
+  document.getElementById('setName').value = s.name;
+  document.getElementById('setWa').value = s.whatsapp_number;
+  document.getElementById('setAddr').value = s.address;
+  document.getElementById('setPin').value = s.active_table_pin;
+  document.getElementById('setRequirePin').checked = s.require_table_pin !== false;
+  document.getElementById('setCodCap').value = s.cod_cap_pkr;
+  document.getElementById('setDelFee').value = s.delivery_fee_pkr;
+  document.getElementById('setTax').value = s.tax_percent;
+  document.getElementById('setLat').value = s.latitude;
+  document.getElementById('setLng').value = s.longitude;
+  document.getElementById('setGeoR').value = s.geo_radius_meters;
+  document.getElementById('setDelR').value = s.delivery_radius_km;
+
+  document.getElementById('wifiSsid').value = s.wifi_ssid;
+  document.getElementById('wifiOnlyMenu').checked = s.wifi_only_menu_mode;
+  document.getElementById('wifiSpeed').value = s.wifi_speed_limit_mbps;
+  document.getElementById('speedVal').textContent = s.wifi_speed_limit_mbps + ' Mbps';
+  document.getElementById('wifiRouter').value = s.wifi_router_model;
+  updateBridgeBadge(s.wifi_bridge_status, s.wifi_bridge_note);
+}
+
+function updateBridgeBadge(status, note) {
+  const b = document.getElementById('bridgeStatusBadge');
+  b.textContent = status === 'online' ? 'Bridge: 🟢 Online' : 'Bridge: 🔴 Offline';
+  b.className = status === 'online' ? 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800' : 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-700';
+  const box = document.getElementById('ispNoticeBox');
+  if (note) { box.textContent = '⚠️ ' + note; box.classList.remove('hidden'); }
+  else { box.classList.add('hidden'); }
+}
+
+async function saveWifiControl() {
+  const res = await fetch('/api/admin/wifi-control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      wifi_ssid: document.getElementById('wifiSsid').value.trim(),
+      wifi_only_menu_mode: document.getElementById('wifiOnlyMenu').checked,
+      wifi_speed_limit_mbps: Number(document.getElementById('wifiSpeed').value),
+      wifi_router_model: document.getElementById('wifiRouter').value,
+    }),
+  });
+  const data = await res.json();
+  updateBridgeBadge(data.bridge_connected ? 'online' : 'offline', data.note);
+  alert(data.bridge_connected ? 'Policy pushed to Local Bridge!' : 'Settings saved (Local Bridge is currently offline).');
+}
+
+async function saveSettings(e) {
+  e.preventDefault();
+  const res = await fetch('/api/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: document.getElementById('setName').value.trim(),
+      whatsapp_number: document.getElementById('setWa').value.trim(),
+      address: document.getElementById('setAddr').value.trim(),
+      active_table_pin: document.getElementById('setPin').value.trim(),
+      require_table_pin: document.getElementById('setRequirePin').checked,
+      cod_cap_pkr: Number(document.getElementById('setCodCap').value),
+      delivery_fee_pkr: Number(document.getElementById('setDelFee').value),
+      tax_percent: Number(document.getElementById('setTax').value),
+      latitude: Number(document.getElementById('setLat').value),
+      longitude: Number(document.getElementById('setLng').value),
+      geo_radius_meters: Number(document.getElementById('setGeoR').value),
+      delivery_radius_km: Number(document.getElementById('setDelR').value),
+    }),
+  });
+  if (res.ok) alert('Settings saved!');
+  else alert('Only owner can update settings.');
+}
+
+async function loadAnalytics() {
+  const res = await fetch('/api/admin/analytics');
+  const a = await res.json();
+  document.getElementById('analyticsCards').innerHTML = `
+    <div class="bg-white p-4 rounded-2xl border"><div class="text-xs text-gray-500">Confirmed Revenue</div><div class="text-xl font-extrabold text-green-700 mt-1">PKR ${a.total_revenue_pkr.toLocaleString()}</div></div>
+    <div class="bg-white p-4 rounded-2xl border"><div class="text-xs text-gray-500">Confirmed Orders</div><div class="text-xl font-extrabold mt-1">${a.confirmed_orders}</div></div>
+    <div class="bg-white p-4 rounded-2xl border"><div class="text-xs text-gray-500">Pending WhatsApp</div><div class="text-xl font-extrabold text-amber-600 mt-1">${a.pending_orders}</div></div>
+    <div class="bg-white p-4 rounded-2xl border"><div class="text-xs text-gray-500">Dine-In / Delivery</div><div class="text-xl font-extrabold mt-1">${a.dine_in_orders} / ${a.delivery_orders}</div></div>
+  `;
+  document.getElementById('topDishesList').innerHTML = a.top_dishes.length
+    ? a.top_dishes.map(d => `<div class="flex justify-between"><span>${d.name}</span><span class="font-bold">${d.qty} sold</span></div>`).join('')
+    : '<p class="text-gray-400 text-xs">Confirm orders to see top dishes.</p>';
+  document.getElementById('mostViewedList').innerHTML = a.most_viewed.map(v => `<div class="flex justify-between"><span>${v.name}</span><span class="font-bold">${v.views} views</span></div>`).join('');
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/admin/login';
+}
+
+initAdmin();
+</script>
+</body>
+</html>
